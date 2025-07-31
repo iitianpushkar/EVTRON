@@ -3,7 +3,6 @@
 pragma solidity ^0.8.25;
 
 import "../libraries/MakerTraitsLib.sol";
-import "../libraries/TakerTraitsLib.sol";
 
 
 interface IOrderMixin {
@@ -97,7 +96,7 @@ interface IOrderMixin {
      */
     function bitsInvalidateForOrder(MakerTraits makerTraits, uint256 additionalMask) external;
 
-    /**
+    /*
      * @notice Fills order's quote, fully or partially (whichever is possible).
      * @param order Order quote to fill
      * @param r R component of signature
@@ -113,8 +112,7 @@ interface IOrderMixin {
         Order calldata order,
         bytes32 r,
         bytes32 vs,
-        uint256 amount,
-        TakerTraits takerTraits
+        uint256 amount
     ) external payable returns(uint256 makingAmount, uint256 takingAmount, bytes32 orderHash);
 
     /**
