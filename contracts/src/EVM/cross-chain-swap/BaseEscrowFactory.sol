@@ -5,19 +5,15 @@ pragma solidity ^0.8.23;
 import { Clones } from "openzeppelin-contracts/contracts/proxy/Clones.sol";
 import { IERC20 } from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import { Create2 } from "openzeppelin-contracts/contracts/utils/Create2.sol";
-import { Address, AddressLib } from "solidity-utils/contracts/libraries/AddressLib.sol";
-import { SafeERC20 } from "solidity-utils/contracts/libraries/SafeERC20.sol";
+import { SafeERC20 } from "@1inch/solidity-utils/contracts/libraries/SafeERC20.sol";
 
-import { IOrderMixin } from "limit-order-protocol/contracts/interfaces/IOrderMixin.sol";
-import { MakerTraitsLib } from "limit-order-protocol/contracts/libraries/MakerTraitsLib.sol";
-import { ResolverValidationExtension } from "limit-order-settlement/contracts/extensions/ResolverValidationExtension.sol";
+import { IOrderMixin } from "../limit-order-protocol/interfaces/IOrderMixin.sol";
 
 import { ImmutablesLib } from "./libraries/ImmutablesLib.sol";
 import { Timelocks, TimelocksLib } from "./libraries/TimelocksLib.sol";
 
 import { IEscrowFactory } from "./interfaces/IEscrowFactory.sol";
 import { IBaseEscrow } from "./interfaces/IBaseEscrow.sol";
-import { SRC_IMMUTABLES_LENGTH } from "./EscrowFactoryContext.sol";
 import { MerkleStorageInvalidator } from "./MerkleStorageInvalidator.sol";
 
 /**
@@ -26,12 +22,12 @@ import { MerkleStorageInvalidator } from "./MerkleStorageInvalidator.sol";
  * @dev Immutable variables must be set in the constructor of the derived contracts.
  * @custom:security-contact security@1inch.io
  */
-abstract contract BaseEscrowFactory is IEscrowFactory, ResolverValidationExtension, MerkleStorageInvalidator {
-    using AddressLib for Address;
+abstract contract BaseEscrowFactory is IEscrowFactory, MerkleStorageInvalidator {
     using Clones for address;
     using ImmutablesLib for IBaseEscrow.Immutables;
     using SafeERC20 for IERC20;
     using TimelocksLib for Timelocks;
+
 
     /// @notice See {IEscrowFactory-ESCROW_SRC_IMPLEMENTATION}.
     address public immutable ESCROW_SRC_IMPLEMENTATION;
@@ -39,6 +35,8 @@ abstract contract BaseEscrowFactory is IEscrowFactory, ResolverValidationExtensi
     address public immutable ESCROW_DST_IMPLEMENTATION;
     bytes32 internal immutable _PROXY_SRC_BYTECODE_HASH;
     bytes32 internal immutable _PROXY_DST_BYTECODE_HASH;
+
+
 
     /**
      * @notice Creates a new escrow contract for maker on the source chain.
@@ -52,57 +50,38 @@ abstract contract BaseEscrowFactory is IEscrowFactory, ResolverValidationExtensi
      *   - 0 / 4 bytes for the fee
      *   - 1 byte for the bitmap
      */
-    function _postInteraction(
+    function postInteraction(
         IOrderMixin.Order calldata order,
-        bytes calldata extension,
         bytes32 orderHash,
         address taker,
         uint256 makingAmount,
         uint256 takingAmount,
-        uint256 remainingMakingAmount,
         bytes calldata extraData
-    ) internal override(ResolverValidationExtension) {
-        uint256 superArgsLength = extraData.length - SRC_IMMUTABLES_LENGTH;
-        super._postInteraction(
-            order, extension, orderHash, taker, makingAmount, takingAmount, remainingMakingAmount, extraData[:superArgsLength]
-        );
+    ) external{
 
-        ExtraDataArgs calldata extraDataArgs;
-        assembly ("memory-safe") {
-            extraDataArgs := add(extraData.offset, superArgsLength)
+        ExtraDataArgs memory extraDataArgs = abi.decode(extraData, (ExtraDataArgs));
+
+        bytes32 hashlock = extraDataArgs.hashlockInfo;
+        if (hashlock == bytes32(0)) revert IBaseEscrow.InvalidSecret();
+
+        if(order.makerAsset == address(0) && order.takerAsset != extraDataArgs.dstToken) {
+            revert IBaseEscrow.InvalidToken();
         }
-
-        bytes32 hashlock;
-
-        if (MakerTraitsLib.allowMultipleFills(order.makerTraits)) {
-            uint256 partsAmount = uint256(extraDataArgs.hashlockInfo) >> 240;
-            if (partsAmount < 2) revert InvalidSecretsAmount();
-            bytes32 key = keccak256(abi.encodePacked(orderHash, uint240(uint256(extraDataArgs.hashlockInfo))));
-            ValidationData memory validated = lastValidated[key];
-            hashlock = validated.leaf;
-            if (!_isValidPartialFill(makingAmount, remainingMakingAmount, order.makingAmount, partsAmount, validated.index)) {
-                revert InvalidPartialFill();
-            }
-        } else {
-            hashlock = extraDataArgs.hashlockInfo;
-        }
-
+    
         IBaseEscrow.Immutables memory immutables = IBaseEscrow.Immutables({
             orderHash: orderHash,
             hashlock: hashlock,
             maker: order.maker,
-            taker: Address.wrap(uint160(taker)),
+            taker: taker,
             token: order.makerAsset,
             amount: makingAmount,
-            safetyDeposit: extraDataArgs.deposits >> 128,
             timelocks: extraDataArgs.timelocks.setDeployedAt(block.timestamp)
         });
 
         DstImmutablesComplement memory immutablesComplement = DstImmutablesComplement({
-            maker: order.receiver.get() == address(0) ? order.maker : order.receiver,
+            maker: order.receiver == address(0) ? order.maker : order.receiver,
             amount: takingAmount,
             token: extraDataArgs.dstToken,
-            safetyDeposit: extraDataArgs.deposits & type(uint128).max,
             chainId: extraDataArgs.dstChainId
         });
 
@@ -110,21 +89,26 @@ abstract contract BaseEscrowFactory is IEscrowFactory, ResolverValidationExtensi
 
         bytes32 salt = immutables.hashMem();
         address escrow = _deployEscrow(salt, 0, ESCROW_SRC_IMPLEMENTATION);
-        if (escrow.balance < immutables.safetyDeposit || IERC20(order.makerAsset.get()).safeBalanceOf(escrow) < makingAmount) {
-            revert InsufficientEscrowBalance();
-        }
+        
+        
+        IERC20(immutables.token).safeTransferFrom(immutables.maker, escrow, immutables.amount);
+
+        emit srcEscrowDeployed(
+            escrow,
+            orderHash,
+            hashlock,
+            immutables.timelocks
+        );
     }
 
     /**
      * @notice See {IEscrowFactory-createDstEscrow}.
      */
-    function createDstEscrow(IBaseEscrow.Immutables calldata dstImmutables, uint256 srcCancellationTimestamp) external payable {
-        address token = dstImmutables.token.get();
-        uint256 nativeAmount = dstImmutables.safetyDeposit;
+    function createDstEscrow(IBaseEscrow.Immutables calldata dstImmutables, uint256 srcCancellationTimestamp) external {
+        address token = dstImmutables.token;
         if (token == address(0)) {
-            nativeAmount += dstImmutables.amount;
+            revert IBaseEscrow.InvalidToken();
         }
-        if (msg.value != nativeAmount) revert InsufficientEscrowBalance();
 
         IBaseEscrow.Immutables memory immutables = dstImmutables;
         immutables.timelocks = immutables.timelocks.setDeployedAt(block.timestamp);
@@ -132,10 +116,9 @@ abstract contract BaseEscrowFactory is IEscrowFactory, ResolverValidationExtensi
         if (immutables.timelocks.get(TimelocksLib.Stage.DstCancellation) > srcCancellationTimestamp) revert InvalidCreationTime();
 
         bytes32 salt = immutables.hashMem();
-        address escrow = _deployEscrow(salt, msg.value, ESCROW_DST_IMPLEMENTATION);
-        if (token != address(0)) {
-            IERC20(token).safeTransferFrom(msg.sender, escrow, immutables.amount);
-        }
+        address escrow = _deployEscrow(salt, 0, ESCROW_DST_IMPLEMENTATION);
+        
+        IERC20(token).safeTransferFrom(msg.sender, escrow, immutables.amount);
 
         emit DstEscrowCreated(escrow, dstImmutables.hashlock, dstImmutables.taker);
     }

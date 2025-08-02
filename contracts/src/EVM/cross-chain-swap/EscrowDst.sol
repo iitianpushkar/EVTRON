@@ -3,8 +3,8 @@
 pragma solidity ^0.8.23;
 
 import { IERC20 } from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import { SafeERC20 } from "solidity-utils/contracts/libraries/SafeERC20.sol";
-import { AddressLib, Address } from "solidity-utils/contracts/libraries/AddressLib.sol";
+import { SafeERC20 } from "@1inch/solidity-utils/contracts/libraries/SafeERC20.sol";
+import { AddressLib, Address } from "@1inch/solidity-utils/contracts/libraries/AddressLib.sol";
 
 import { Timelocks, TimelocksLib } from "./libraries/TimelocksLib.sol";
 
@@ -24,7 +24,6 @@ contract EscrowDst is Escrow, IEscrowDst {
     using AddressLib for Address;
     using TimelocksLib for Timelocks;
 
-    constructor(uint32 rescueDelay, IERC20 accessToken) BaseEscrow(rescueDelay, accessToken) {}
 
     /**
      * @notice See {IBaseEscrow-withdraw}.
@@ -65,8 +64,7 @@ contract EscrowDst is Escrow, IEscrowDst {
         onlyValidImmutables(immutables)
         onlyAfter(immutables.timelocks.get(TimelocksLib.Stage.DstCancellation))
     {
-        _uniTransfer(immutables.token.get(), immutables.taker.get(), immutables.amount);
-        _ethTransfer(msg.sender, immutables.safetyDeposit);
+        _uniTransfer(immutables.token, immutables.taker, immutables.amount);
         emit EscrowCancelled();
     }
 
@@ -79,8 +77,7 @@ contract EscrowDst is Escrow, IEscrowDst {
         onlyValidImmutables(immutables)
         onlyValidSecret(secret, immutables)
     {
-        _uniTransfer(immutables.token.get(), immutables.maker.get(), immutables.amount);
-        _ethTransfer(msg.sender, immutables.safetyDeposit);
+        _uniTransfer(immutables.token, immutables.maker, immutables.amount);
         emit EscrowWithdrawal(secret);
     }
 }

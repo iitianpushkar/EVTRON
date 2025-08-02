@@ -2,17 +2,18 @@
 pragma solidity ^0.8.13;
 
 import {Script, console} from "forge-std/Script.sol";
-import {Counter} from "../src/Counter.sol";
+import {OrderMixin} from "../src/EVM/OrderMixin.sol";
 
-contract CounterScript is Script {
-    Counter public counter;
+contract Deploy is Script {
+    OrderMixin public ordermixin;
 
     function setUp() public {}
 
     function run() public {
         vm.startBroadcast();
 
-        counter = new Counter();
+        ordermixin = new OrderMixin();
+        console.log("OrderMixin deployed at:", address(ordermixin));
 
         vm.stopBroadcast();
     }

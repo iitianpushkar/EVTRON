@@ -3,8 +3,8 @@
 pragma solidity ^0.8.23;
 
 import { IERC20 } from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import { AddressLib, Address } from "solidity-utils/contracts/libraries/AddressLib.sol";
-import { SafeERC20 } from "solidity-utils/contracts/libraries/SafeERC20.sol";
+import { AddressLib, Address } from "@1inch/solidity-utils/contracts/libraries/AddressLib.sol";
+import { SafeERC20 } from "@1inch/solidity-utils/contracts/libraries/SafeERC20.sol";
 
 import { ImmutablesLib } from "./libraries/ImmutablesLib.sol";
 import { Timelocks, TimelocksLib } from "./libraries/TimelocksLib.sol";
@@ -30,13 +30,9 @@ abstract contract BaseEscrow is IBaseEscrow {
     /// @notice See {IBaseEscrow-FACTORY}.
     address public immutable FACTORY = msg.sender;
 
-    constructor(uint32 rescueDelay, IERC20 accessToken) {
-        RESCUE_DELAY = rescueDelay;
-        _ACCESS_TOKEN = accessToken;
-    }
 
     modifier onlyTaker(Immutables calldata immutables) {
-        if (msg.sender != immutables.taker.get()) revert InvalidCaller();
+        if (msg.sender != immutables.taker) revert InvalidCaller();
         _;
     }
 

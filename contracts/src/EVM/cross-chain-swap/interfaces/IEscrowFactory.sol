@@ -2,8 +2,6 @@
 
 pragma solidity ^0.8.0;
 
-import { Address } from "solidity-utils/contracts/libraries/AddressLib.sol";
-
 import { Timelocks } from "../libraries/TimelocksLib.sol";
 
 import { IBaseEscrow } from "./IBaseEscrow.sol";
@@ -17,16 +15,15 @@ interface IEscrowFactory {
     struct ExtraDataArgs {
         bytes32 hashlockInfo; // Hash of the secret or the Merkle tree root if multiple fills are allowed
         uint256 dstChainId;
-        Address dstToken;
+        address dstToken;
         uint256 deposits;
         Timelocks timelocks;
     }
 
     struct DstImmutablesComplement {
-        Address maker;
+        address maker;
         uint256 amount;
-        Address token;
-        uint256 safetyDeposit;
+        address token;
         uint256 chainId;
     }
 
@@ -47,7 +44,14 @@ interface IEscrowFactory {
      * @param hashlock The hash of the secret.
      * @param taker The address of the taker.
      */
-    event DstEscrowCreated(address escrow, bytes32 hashlock, Address taker);
+    event DstEscrowCreated(address escrow, bytes32 hashlock, address taker);
+
+    event srcEscrowDeployed(
+        address indexed escrow,
+        bytes32 indexed orderHash,
+        bytes32 indexed hashlock,
+        Timelocks timelocks
+    );
 
     /* solhint-disable func-name-mixedcase */
     /// @notice Returns the address of implementation on the source chain.
@@ -63,7 +67,7 @@ interface IEscrowFactory {
      * @param dstImmutables The immutables of the escrow contract that are used in deployment.
      * @param srcCancellationTimestamp The start of the cancellation period for the source chain.
      */
-    function createDstEscrow(IBaseEscrow.Immutables calldata dstImmutables, uint256 srcCancellationTimestamp) external payable;
+    function createDstEscrow(IBaseEscrow.Immutables calldata dstImmutables, uint256 srcCancellationTimestamp) external;
 
     /**
      * @notice Returns the deterministic address of the source escrow based on the salt.

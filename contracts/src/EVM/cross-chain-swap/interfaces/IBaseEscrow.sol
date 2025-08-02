@@ -2,8 +2,6 @@
 
 pragma solidity ^0.8.0;
 
-import { Address } from "solidity-utils/contracts/libraries/AddressLib.sol";
-
 import { Timelocks } from "../libraries/TimelocksLib.sol";
 
 /**
@@ -15,11 +13,10 @@ interface IBaseEscrow {
     struct Immutables {
         bytes32 orderHash;
         bytes32 hashlock;  // Hash of the secret.
-        Address maker;
-        Address taker;
-        Address token;
+        address maker;
+        address taker;
+        address token;
         uint256 amount;
-        uint256 safetyDeposit;
         Timelocks timelocks;
     }
 
@@ -46,6 +43,7 @@ interface IBaseEscrow {
     error InvalidSecret();
     error InvalidTime();
     error NativeTokenSendingFailure();
+    error InvalidToken();
 
     /* solhint-disable func-name-mixedcase */
     /// @notice Returns the delay for rescuing funds from the escrow.

@@ -9,5 +9,7 @@ remappings = [
   '@1inch/solidity-utils/contracts=lib/solidity-utils/contracts'
 ]
 
+etherscan_api_key = "F5SAX469TN3NBG3QIVA2537QXG8XTSYMKA"
+
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

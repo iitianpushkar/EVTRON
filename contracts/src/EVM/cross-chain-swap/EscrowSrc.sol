@@ -3,9 +3,7 @@
 pragma solidity ^0.8.23;
 
 import { IERC20 } from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import { SafeERC20 } from "solidity-utils/contracts/libraries/SafeERC20.sol";
-import { AddressLib, Address } from "solidity-utils/contracts/libraries/AddressLib.sol";
-
+import { SafeERC20 } from "@1inch/solidity-utils/contracts/libraries/SafeERC20.sol";
 import { Timelocks, TimelocksLib } from "./libraries/TimelocksLib.sol";
 import { ImmutablesLib } from "./libraries/ImmutablesLib.sol";
 
@@ -22,12 +20,9 @@ import { Escrow } from "./Escrow.sol";
  * @custom:security-contact security@1inch.io
  */
 contract EscrowSrc is Escrow, IEscrowSrc {
-    using AddressLib for Address;
     using ImmutablesLib for Immutables;
     using SafeERC20 for IERC20;
     using TimelocksLib for Timelocks;
-
-    constructor(uint32 rescueDelay, IERC20 accessToken) BaseEscrow(rescueDelay, accessToken) {}
 
     /**
      * @notice See {IBaseEscrow-withdraw}.
@@ -71,7 +66,7 @@ contract EscrowSrc is Escrow, IEscrowSrc {
         onlyAfter(immutables.timelocks.get(TimelocksLib.Stage.SrcPublicWithdrawal))
         onlyBefore(immutables.timelocks.get(TimelocksLib.Stage.SrcCancellation))
     {
-        _withdrawTo(secret, immutables.taker.get(), immutables);
+        _withdrawTo(secret, immutables.taker, immutables);
     }
 
     /**
@@ -109,12 +104,10 @@ contract EscrowSrc is Escrow, IEscrowSrc {
      * @param immutables The immutable values used to deploy the clone contract.
      */
     function _withdrawTo(bytes32 secret, address target, Immutables calldata immutables)
-        internal
-        onlyValidImmutables(immutables)
+        internal  
         onlyValidSecret(secret, immutables)
     {
-        IERC20(immutables.token.get()).safeTransfer(target, immutables.amount);
-        _ethTransfer(msg.sender, immutables.safetyDeposit);
+        IERC20(immutables.token).safeTransfer(target, immutables.amount);
         emit EscrowWithdrawal(secret);
     }
 
@@ -123,8 +116,7 @@ contract EscrowSrc is Escrow, IEscrowSrc {
      * @param immutables The immutable values used to deploy the clone contract.
      */
     function _cancel(Immutables calldata immutables) internal onlyValidImmutables(immutables) {
-        IERC20(immutables.token.get()).safeTransfer(immutables.maker.get(), immutables.amount);
-        _ethTransfer(msg.sender, immutables.safetyDeposit);
+        IERC20(immutables.token).safeTransfer(immutables.maker, immutables.amount);
         emit EscrowCancelled();
     }
 }

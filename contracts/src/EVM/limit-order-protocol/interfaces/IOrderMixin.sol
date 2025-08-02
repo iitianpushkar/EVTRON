@@ -14,7 +14,6 @@ interface IOrderMixin {
         address takerAsset;
         uint256 makingAmount;
         uint256 takingAmount;
-        MakerTraits makerTraits;
     }
 
     error InvalidatedOrder();
@@ -36,65 +35,67 @@ interface IOrderMixin {
     error MismatchArraysLengths();
     error InvalidPermit2Transfer();
     error SimulationResults(bool success, bytes res);
+    error OrderAlreadyFilled();
 
-    /**
+    /*
      * @notice Emitted when order gets filled
      * @param orderHash Hash of the order
      * @param remainingAmount Amount of the maker asset that remains to be filled
      */
     event OrderFilled(
         bytes32 orderHash,
-        uint256 remainingAmount
+        uint256 makingAmount,
+        uint256 takingAmount
     );
 
     /**
      * @notice Emitted when order without `useBitInvalidator` gets cancelled
      * @param orderHash Hash of the order
      */
-    event OrderCancelled(
+ /*   event OrderCancelled(
         bytes32 orderHash
     );
-
-    /**
+*/
+    /*
      * @notice Emitted when order with `useBitInvalidator` gets cancelled
      * @param maker Maker address
      * @param slotIndex Slot index that was updated
      * @param slotValue New slot value
      */
-    event BitInvalidatorUpdated(
+ /*   event BitInvalidatorUpdated(
         address indexed maker,
         uint256 slotIndex,
         uint256 slotValue
     );
-
-    /**
+*/
+    /*
      * @notice Delegates execution to custom implementation. Could be used to validate if `transferFrom` works properly
      * @dev The function always reverts and returns the simulation results in revert data.
      * @param target Addresses that will be delegated
      * @param data Data that will be passed to delegatee
      */
-    function simulate(address target, bytes calldata data) external;
+ //  function simulate(address target, bytes calldata data) external;
 
-    /**
+    /*
      * @notice Cancels order's quote
      * @param makerTraits Order makerTraits
      * @param orderHash Hash of the order to cancel
      */
-    function cancelOrder(MakerTraits makerTraits, bytes32 orderHash) external;
+ //   function cancelOrder(MakerTraits makerTraits, bytes32 orderHash) external;
 
-    /**
+    /*
      * @notice Cancels orders' quotes
      * @param makerTraits Orders makerTraits
      * @param orderHashes Hashes of the orders to cancel
      */
-    function cancelOrders(MakerTraits[] calldata makerTraits, bytes32[] calldata orderHashes) external;
+//    function cancelOrders(MakerTraits[] calldata makerTraits, bytes32[] calldata orderHashes) external;
 
-    /**
+    /*
      * @notice Cancels all quotes of the maker (works for bit-invalidating orders only)
      * @param makerTraits Order makerTraits
      * @param additionalMask Additional bitmask to invalidate orders
      */
-    function bitsInvalidateForOrder(MakerTraits makerTraits, uint256 additionalMask) external;
+ //   function bitsInvalidateForOrder(MakerTraits makerTraits, uint256 additionalMask) external;
 
     /*
      * @notice Fills order's quote, fully or partially (whichever is possible).
@@ -108,12 +109,14 @@ interface IOrderMixin {
      * @return takingAmount Actual amount transferred from taker to maker
      * @return orderHash Hash of the filled order
      */
+
+    
+
     function fillOrder(
         Order calldata order,
-        bytes32 r,
-        bytes32 vs,
-        uint256 amount
-    ) external payable returns(uint256 makingAmount, uint256 takingAmount, bytes32 orderHash);
+        bytes calldata signature,
+        bytes calldata extradata
+    ) external returns(bytes32 orderHash);
 
     /**
      * @notice Returns bitmask for double-spend invalidators based on lowest byte of order.info and filled quotes
@@ -121,21 +124,21 @@ interface IOrderMixin {
      * @param slot Slot number to return bitmask for
      * @return result Each bit represents whether corresponding was already invalidated
      */
-    function bitInvalidatorForOrder(address maker, uint256 slot) external view returns(uint256 result);
+//    function bitInvalidatorForOrder(address maker, uint256 slot) external view returns(uint256 result);
 
     /**
      * @notice Returns bitmask for double-spend invalidators based on lowest byte of order.info and filled quotes
      * @param orderHash Hash of the order
      * @return remaining Remaining amount of the order
      */
-    function remainingInvalidatorForOrder(address maker, bytes32 orderHash) external view returns(uint256 remaining);
+ //   function remainingInvalidatorForOrder(address maker, bytes32 orderHash) external view returns(uint256 remaining);
 
     /**
      * @notice Returns bitmask for double-spend invalidators based on lowest byte of order.info and filled quotes
      * @param orderHash Hash of the order
      * @return remainingRaw Inverse of the remaining amount of the order if order was filled at least once, otherwise 0
      */
-    function rawRemainingInvalidatorForOrder(address maker, bytes32 orderHash) external view returns(uint256 remainingRaw);
+ //   function rawRemainingInvalidatorForOrder(address maker, bytes32 orderHash) external view returns(uint256 remainingRaw);
 
     /**
      * @notice Returns order hash, hashed with limit order protocol contract EIP712

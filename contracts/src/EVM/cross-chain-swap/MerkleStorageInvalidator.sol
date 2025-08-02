@@ -2,14 +2,13 @@
 
 pragma solidity ^0.8.23;
 
-import { IOrderMixin } from "limit-order-protocol/contracts/interfaces/IOrderMixin.sol";
-import { ExtensionLib } from "limit-order-protocol/contracts/libraries/ExtensionLib.sol";
-import { ITakerInteraction } from "limit-order-protocol/contracts/interfaces/ITakerInteraction.sol";
+import { IOrderMixin } from "../limit-order-protocol/interfaces/IOrderMixin.sol";
+//import { ExtensionLib } from "../limit-order-protocol/libraries/ExtensionLib.sol";
+import { ITakerInteraction } from "../limit-order-protocol/interfaces/ITakerInteraction.sol";
 import { MerkleProof } from "openzeppelin-contracts/contracts/utils/cryptography/MerkleProof.sol";
 
 import { IEscrowFactory } from "./interfaces/IEscrowFactory.sol";
 import { IMerkleStorageInvalidator } from "./interfaces/IMerkleStorageInvalidator.sol";
-import { SRC_IMMUTABLES_LENGTH } from "./EscrowFactoryContext.sol"; // solhint-disable-line no-unused-import
 
 /**
  * @title Merkle Storage Invalidator contract
@@ -18,7 +17,7 @@ import { SRC_IMMUTABLES_LENGTH } from "./EscrowFactoryContext.sol"; // solhint-d
  */
 contract MerkleStorageInvalidator is IMerkleStorageInvalidator, ITakerInteraction {
     using MerkleProof for bytes32[];
-    using ExtensionLib for bytes;
+    //using ExtensionLib for bytes;
 
     address private immutable _LIMIT_ORDER_PROTOCOL;
 
@@ -52,16 +51,11 @@ contract MerkleStorageInvalidator is IMerkleStorageInvalidator, ITakerInteractio
         uint256 /* remainingMakingAmount */,
         bytes calldata extraData
     ) external onlyLOP {
-        bytes calldata postInteraction = extension.postInteractionTargetAndData();
-        IEscrowFactory.ExtraDataArgs calldata extraDataArgs;
-        TakerData calldata takerData;
-        assembly ("memory-safe") {
-            extraDataArgs := add(postInteraction.offset, sub(postInteraction.length, SRC_IMMUTABLES_LENGTH))
-            takerData := extraData.offset
-        }
+        IEscrowFactory.ExtraDataArgs memory extraDataArgs = abi.decode(extraData, (IEscrowFactory.ExtraDataArgs));
+        TakerData memory takerData = abi.decode(extraData, (TakerData));
         uint240 rootShortened = uint240(uint256(extraDataArgs.hashlockInfo));
         bytes32 key = keccak256(abi.encodePacked(orderHash, rootShortened));
-        bytes32 rootCalculated = takerData.proof.processProofCalldata(
+        bytes32 rootCalculated = takerData.proof.processProof(
             keccak256(abi.encodePacked(uint64(takerData.idx), takerData.secretHash))
         );
         if (uint240(uint256(rootCalculated)) != rootShortened) revert InvalidProof();

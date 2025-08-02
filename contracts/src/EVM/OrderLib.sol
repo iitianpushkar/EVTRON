@@ -37,8 +37,7 @@ import "./limit-order-protocol/interfaces/IAmountGetter.sol";
             "address makerAsset,"
             "address takerAsset,"
             "uint256 makingAmount,"
-            "uint256 takingAmount,"
-            "uint256 makerTraits"
+            "uint256 takingAmount"
         ")"
     );
     uint256 constant internal _ORDER_STRUCT_SIZE = 0x100;
@@ -51,16 +50,20 @@ import "./limit-order-protocol/interfaces/IAmountGetter.sol";
       * @return result The keccak256 hash of the order data.
       */
     function hash(IOrderMixin.Order calldata order, bytes32 domainSeparator) internal pure returns(bytes32 result) {
-        bytes32 typehash = _LIMIT_ORDER_TYPEHASH;
-        assembly ("memory-safe") { // solhint-disable-line no-inline-assembly
-            let ptr := mload(0x40)
+        bytes32 structHash = keccak256(
+        abi.encode(
+            _LIMIT_ORDER_TYPEHASH,
+            order.salt,
+            order.maker,
+            order.receiver,
+            order.makerAsset,
+            order.takerAsset,
+            order.makingAmount,
+            order.takingAmount
+        )
+    );
 
-            // keccak256(abi.encode(_LIMIT_ORDER_TYPEHASH, order));
-            mstore(ptr, typehash)
-            calldatacopy(add(ptr, 0x20), order, _ORDER_STRUCT_SIZE)
-            result := keccak256(ptr, _DATA_HASH_SIZE)
-        }
-        result = ECDSA.toTypedDataHash(domainSeparator, result);
+    return ECDSA.toTypedDataHash(domainSeparator, structHash);
     }
 
     /**
