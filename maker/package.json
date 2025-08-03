@@ -1,5 +1,5 @@
 {
-  "name": "scripts",
+  "name": "maker",
   "version": "1.0.0",
   "description": "",
   "license": "ISC",
@@ -7,11 +7,11 @@
   "type": "commonjs",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "createorder":"node createOrder.js"
   },
   "dependencies": {
     "dotenv": "^17.2.1",
-    "ethers": "^6.15.0",
-    "tronweb": "^6.0.4"
+    "ethers": "^6.15.0"
   }
 }

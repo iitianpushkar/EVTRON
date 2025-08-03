@@ -1,7 +1,9 @@
 require("dotenv").config();
 const { ethers } = require("ethers");
+const path = require("path");
+const fs = require("fs");
 
-async function main() {
+async function createOrder() {
   // ─── Setup ────────────────────────────────────────────────────────────────
   const RPC_URL = process.env.RPC_URL;
   const PRIVATE_KEY = process.env.PRIVATE_KEY;
@@ -10,15 +12,8 @@ async function main() {
 
   const provider = new ethers.JsonRpcProvider(RPC_URL);
   const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
-  const orderMixin = new ethers.Contract(
-    LIMIT_ORDER_ADDRESS,
-    [
-      "function fillOrder((uint256 salt,address maker,address receiver,address makerAsset,address takerAsset,uint256 makingAmount,uint256 takingAmount),bytes signature,bytes extradata) external returns (bytes32)"
-    ],
-    wallet
-  );
 
-  // ─── 1) Generate secret & hashlock ───────────────────────────────────────
+
   const secret = ethers.randomBytes(32);
   const hashlock = ethers.keccak256(
     ethers.AbiCoder.defaultAbiCoder().encode(["bytes32"], [secret])
@@ -27,8 +22,6 @@ async function main() {
   console.log("Secret:", ethers.hexlify(secret));
   console.log("Hashlock:", hashlock);
 
-  // ─── 2) Build timelocks (4 stages: 1h, 2h, 3h, 4h for example) ───────────
-  // We'll just set the 4 “Src” stages; you can extend for “Dst” ones as needed.
   const oneHour = 60;
   const offsets = [
     oneHour, 
@@ -36,18 +29,18 @@ async function main() {
     oneHour * 60, 
     oneHour * 60
   ]
-    .map((v, i) => BigInt(v) << BigInt(i * 32))   // pack each uint32 into bits [i*32 .. i*32+31]
+    .map((v, i) => BigInt(v) << BigInt(i * 32))   
     .reduce((a, b) => a | b, 0n);
 
   const deployedAt = BigInt(Math.floor(Date.now() / 1000)) << 224n;
   const packedTimelocks = offsets | deployedAt;
   console.log("Packed Timelocks:", "0x" + packedTimelocks.toString(16).padStart(64, "0"));
 
-  // ─── 3) Build ExtraDataArgs and ABI-encode ───────────────────────────────
-  // Solidity: ExtraDataArgs { bytes32 hashlockInfo; uint256 dstChainId; address dstToken; uint256 deposits; Timelocks timelocks; }
-  const dstChainId = 84532;                    // e.g. baseSepolia
-  const dstToken   = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";       // or your destination asset
-  const deposits   = ethers.parseUnits("0.1", 18); // optional escrow deposit
+  
+  const dstChainId = 3448148188;            
+  const dstToken   = ethers.ZeroAddress;
+  const deposits   = ethers.parseUnits("0", 18);
+ // const dstReceiver = "TJA1LC7eeZQhuQpADNxzGfuu4RSSiG68jv";
 
   const extraData = ethers.AbiCoder.defaultAbiCoder().encode(
     ["tuple(bytes32,uint256,address,uint256,uint256)"],
@@ -55,7 +48,6 @@ async function main() {
   );
   console.log("extraData:", extraData);
 
-  // ─── 4) Construct & sign the Order ───────────────────────────────────────
   const chainId = (await provider.getNetwork()).chainId;
   const domain = {
     name: "1inch Limit Order Protocol",
@@ -75,13 +67,12 @@ async function main() {
     ]
   };
 
-  // Example values—replace with your actual addresses & amounts:
   const order = {
-    salt:           BigInt(1),
+    salt:           BigInt(Date.now()), 
     maker:          await wallet.getAddress(),
-    receiver:       ethers.ZeroAddress,
-    makerAsset:     "0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9",    // e.g. WETH on Sepolia
-    takerAsset:     "0x036CbD53842c5426634e7929541eC2318f3dCF7e",    // e.g. USDC on baseSepolia
+    receiver:       "0xc6546151c43038a40bbb922c1c8d8fd656da60fd",
+    makerAsset:     "0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9",    
+    takerAsset:     ethers.ZeroAddress,   
     makingAmount:   ethers.parseUnits("0.01", 18),
     takingAmount:   ethers.parseUnits("100", 6),
   };
@@ -89,7 +80,7 @@ async function main() {
   const signature = await wallet.signTypedData(domain, types, order);
   console.log("Signature:", signature);
 
-    // ─── 5) Approve EscrowFactory to spend makerAsset ────────────────────────────
+
     const token = new ethers.Contract(
       order.makerAsset,
       [
@@ -108,26 +99,53 @@ async function main() {
     } else {
       console.log("✅ Sufficient allowance already exists");
     }
-  
 
-  // ─── 6) Call fillOrder and deploy src escrow ─────────────────────────────
-  const tx = await orderMixin.fillOrder(
-    order,
-    signature,
-    extraData,
-    { gasLimit: 1_000_000 }
-  );
-  console.log("tx hash:", tx.hash);
-  const receipt = await tx.wait();
-  console.log("✅ fillOrder mined, logs:");
-  for (const log of receipt.logs) {
-    try {
-      console.log("  ", orderMixin.interface.parseLog(log));
-    } catch {}
-  }
+    const completeOrder = {
+        order,
+        signature,
+        extraData,
+      };
+
+      const secrets = {
+        secret: ethers.hexlify(secret),
+        hashlock:hashlock
+      };
+
+
+      const outDir = path.resolve(__dirname, "./secrets");
+      const outPath = path.join(outDir, "secret.json");
+  
+      if (!fs.existsSync(outDir)) {
+          fs.mkdirSync(outDir, { recursive: true });
+      }
+  
+      fs.writeFileSync(
+          outPath,
+          JSON.stringify(secrets, (key, value) =>
+            typeof value === "bigint" ? value.toString() : value,
+          2)
+        );
+    
+
+    const outputDir = path.resolve(__dirname, "../resolver/orders");
+    const outputPath = path.join(outputDir, "order.json");
+
+    if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    fs.writeFileSync(
+        outputPath,
+        JSON.stringify(completeOrder, (key, value) =>
+          typeof value === "bigint" ? value.toString() : value,
+        2)
+      );
+      
+    console.log("✅ Order data written to", outputPath);
+  
 }
 
-main().catch((err) => {
+createOrder().catch((err) => {
   console.error(err);
   process.exit(1);
 });
